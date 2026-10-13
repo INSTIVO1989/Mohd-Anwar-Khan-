@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { Job, JobStatus, Technician } from '../types';
+import { WorkspaceHub } from './WorkspaceHub';
 import {
   ShieldCheck,
   TrendingUp,
@@ -224,6 +225,9 @@ export const AdminPortal: React.FC = () => {
           ))}
         </div>
       </div>
+
+      {/* Google Workspace Integration Hub (Calendar, Sheets, Drive, Gmail) */}
+      <WorkspaceHub />
 
       {/* Operations Dispatch Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">

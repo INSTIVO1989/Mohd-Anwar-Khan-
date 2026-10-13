@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext';
 import { Wrench, Phone, MessageSquare, Search, ShoppingBag } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
-  const { cart, setIsBookingModalOpen, setIsTrackingModalOpen, setIsChatDrawerOpen } = useApp();
+  const { cart, setIsBookingModalOpen, setIsTrackingModalOpen, setIsChatDrawerOpen, setRole } = useApp();
 
   const totalCartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
@@ -42,6 +42,16 @@ export const Navbar: React.FC = () => {
           >
             <Search className="w-3.5 h-3.5 text-slate-400" />
             Track Job
+          </button>
+          <button
+            onClick={() => {
+              setRole('admin');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            className="hover:text-indigo-700 transition-colors flex items-center gap-1.5 whitespace-nowrap text-indigo-600 font-bold cursor-pointer"
+          >
+            <span className="w-2 h-2 rounded-full bg-indigo-500" />
+            Workspace Hub
           </button>
         </nav>
 
