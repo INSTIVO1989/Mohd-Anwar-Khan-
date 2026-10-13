@@ -1,0 +1,6 @@
+{
+  "name": "Furniture Fix - Map Chatbot & Furniture Assembly Operations",
+  "description": "Interactive map-based location chatbot, instant 2026 itemized rate card booking, and dispatch operations portal for furniture assembly across the Mumbai Metropolitan Region.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
