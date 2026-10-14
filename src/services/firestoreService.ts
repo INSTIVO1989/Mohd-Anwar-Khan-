@@ -22,12 +22,10 @@ const SERVICES_COLLECTION = 'services';
 const PAYMENTS_COLLECTION = 'payments';
 const AUDIT_LOGS_COLLECTION = 'auditLogs';
 
-// Helper to generate collision-resistant sequential human-friendly Job IDs: FF-26-0XXXX
-export function generateJobId(existingCount: number = 0): string {
-  const timestampSuffix = Date.now().toString().slice(-4);
-  const randomDigit = Math.floor(Math.random() * 9) + 1;
-  const sequentialNum = 4289 + existingCount;
-  return `FF-26-${randomDigit}${timestampSuffix.slice(-3)}`;
+// Helper to generate collision-resistant, unguessable Job IDs: FF-26-XXXXXX (6 random digits)
+export function generateJobId(_existingCount: number = 0): string {
+  const randomSuffix = Math.floor(100000 + Math.random() * 900000);
+  return `FF-26-${randomSuffix}`;
 }
 
 // -------------------------------------------------------------
@@ -49,16 +47,14 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
 }
 
 export async function syncOrCreateUserProfile(
-  user: { uid: string; email: string | null; displayName: string | null; photoURL: string | null },
-  defaultRole: UserRole = 'customer',
-  technicianId?: string
+  user: { uid: string; email: string | null; displayName: string | null; photoURL: string | null }
 ): Promise<UserProfile> {
   const adminEmail = 'furniturefixservice@gmail.com';
   const isAdmin = user.email?.toLowerCase() === adminEmail.toLowerCase();
 
-  // Look up if user matches known technician email
-  let matchedTechId = technicianId;
-  if (!matchedTechId && user.email) {
+  // Look up if user matches known technician email from official roster
+  let matchedTechId: string | undefined = undefined;
+  if (user.email) {
     const tech = TECHNICIANS_DATA.find(
       (t) => t.email && t.email.toLowerCase() === user.email?.toLowerCase()
     );
@@ -67,7 +63,8 @@ export async function syncOrCreateUserProfile(
     }
   }
 
-  const determinedRole: UserRole = isAdmin ? 'admin' : matchedTechId ? 'technician' : defaultRole;
+  // Trusted authorization: only master email can be admin, only roster email can be tech, everyone else is customer
+  const determinedRole: UserRole = isAdmin ? 'admin' : matchedTechId ? 'technician' : 'customer';
 
   try {
     const userDocRef = doc(db, USERS_COLLECTION, user.uid);
@@ -99,7 +96,7 @@ export async function syncOrCreateUserProfile(
       updatedAt: new Date().toISOString(),
     });
 
-    // Record audit log
+    // Record audit log for authenticated user
     await recordAuditLog('USER_REGISTERED', user.uid, `Role assigned: ${determinedRole}`, user.email || undefined);
 
     return newProfile;
@@ -497,18 +494,24 @@ export async function recordPaymentInFirestore(
 
 export async function recordAuditLog(action: string, actor: string, details: string, email?: string): Promise<void> {
   try {
+    const currentUid = auth.currentUser?.uid;
+    // Audit logs strictly require authenticated author matching request.auth.uid or admin
+    if (!currentUid) {
+      return;
+    }
     const logId = `LOG-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const logDocRef = doc(db, AUDIT_LOGS_COLLECTION, logId);
     await setDoc(logDocRef, {
       id: logId,
       action,
-      userId: actor,
-      userEmail: email || auth.currentUser?.email || 'system',
+      userId: currentUid,
+      actorLabel: actor,
+      userEmail: email || auth.currentUser?.email || 'authenticated_user',
       details,
       timestamp: new Date().toISOString(),
     });
   } catch (e) {
-    // Audit logging should not crash the main thread if rules reject non-critical action
+    // Non-blocking for UI operations
     console.warn('Audit log write skipped or failed:', e);
   }
 }

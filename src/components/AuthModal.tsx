@@ -157,44 +157,19 @@ export const AuthModal: React.FC = () => {
                 </div>
               )}
 
-              {/* Role Selection for registration / login */}
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-700 block uppercase tracking-wider">
-                  Select Requested Role:
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setPreferredRole('customer')}
-                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                      preferredRole === 'customer'
-                        ? 'border-amber-500 bg-amber-50/50 shadow-xs ring-1 ring-amber-500'
-                        : 'border-slate-200 hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <User className="w-4 h-4 text-amber-600" />
-                      <span className="font-bold text-xs text-slate-900">Customer</span>
-                    </div>
-                    <p className="text-[11px] text-slate-500 mt-1">Book services & track live status</p>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setPreferredRole('technician')}
-                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                      preferredRole === 'technician'
-                        ? 'border-teal-500 bg-teal-50/50 shadow-xs ring-1 ring-teal-500'
-                        : 'border-slate-200 hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <Wrench className="w-4 h-4 text-teal-600" />
-                      <span className="font-bold text-xs text-slate-900">Technician</span>
-                    </div>
-                    <p className="text-[11px] text-slate-500 mt-1">Field job queue & payouts</p>
-                  </button>
-                </div>
+              {/* Role policy explanation */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
+                <span className="text-[11px] font-bold text-slate-800 uppercase tracking-wider block">
+                  Role-Based Authorization Policy
+                </span>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Your account role is cryptographically determined by Furniture Fix authorization:
+                </p>
+                <ul className="text-xs text-slate-500 space-y-1 list-disc list-inside">
+                  <li><strong className="text-slate-700">Customers:</strong> All standard Google sign-ins (zero advance booking & personal job tracking).</li>
+                  <li><strong className="text-teal-700">Technicians:</strong> Verified via official field team email / technician roster.</li>
+                  <li><strong className="text-indigo-700">Admin:</strong> Protected & reserved for <span className="underline">furniturefixservice@gmail.com</span>.</li>
+                </ul>
               </div>
 
               {/* Google Sign In Button */}

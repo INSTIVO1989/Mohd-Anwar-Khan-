@@ -53,7 +53,7 @@ export interface JobAddOn {
 
 export interface Job {
   id: string; // e.g., "FF-26-04287"
-  customerId?: string; // Auth UID or client token
+  customerId?: string | null; // Auth UID or client token
   customer: {
     name: string;
     mobile: string;

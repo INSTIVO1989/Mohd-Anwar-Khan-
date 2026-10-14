@@ -282,15 +282,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const res = await googleSignIn();
       if (res?.user) {
-        const profile = await syncOrCreateUserProfile(
-          {
-            uid: res.user.uid,
-            email: res.user.email,
-            displayName: res.user.displayName,
-            photoURL: res.user.photoURL,
-          },
-          preferredRole
-        );
+        const profile = await syncOrCreateUserProfile({
+          uid: res.user.uid,
+          email: res.user.email,
+          displayName: res.user.displayName,
+          photoURL: res.user.photoURL,
+        });
         setCurrentUser(profile);
         setRole(profile.role);
         if (profile.role === 'technician' && profile.technicianId) {
@@ -360,7 +357,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   ): Promise<Job> => {
     const jobId = generateJobId(jobs.length);
     const now = new Date().toISOString();
-    const customerUid = firebaseUser?.uid || undefined;
+    const customerUid = firebaseUser?.uid || null;
 
     const newJob: Job = {
       ...data,

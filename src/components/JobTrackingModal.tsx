@@ -39,6 +39,8 @@ export const JobTrackingModal: React.FC = () => {
     technicians,
     respondToAddOn,
     recordPayment,
+    firebaseUser,
+    setIsAuthModalOpen,
   } = useApp();
 
   const [searchId, setSearchId] = useState('');
@@ -158,9 +160,23 @@ export const JobTrackingModal: React.FC = () => {
           </form>
 
           {searchNotFound && (
-            <p className="text-xs text-red-600 mt-2 font-medium">
-              No booking found matching "{targetId}". Please verify your Job ID format (e.g. FF-26-04287).
-            </p>
+            <div className="mt-3 p-3 bg-amber-50/80 border border-amber-200 rounded-xl space-y-2">
+              <p className="text-xs text-amber-900 font-medium">
+                No active booking found matching "{targetId}" in this session, or access is protected by privacy rules.
+              </p>
+              {!firebaseUser && (
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[11px] text-amber-800">Booked with your Google account?</span>
+                  <button
+                    type="button"
+                    onClick={() => setIsAuthModalOpen(true)}
+                    className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold rounded-lg cursor-pointer transition-colors"
+                  >
+                    Sign In to View
+                  </button>
+                </div>
+              )}
+            </div>
           )}
         </div>
 
