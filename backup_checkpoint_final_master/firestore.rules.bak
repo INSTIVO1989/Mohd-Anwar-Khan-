@@ -1,0 +1,233 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Admin access strictly checked against master email or admins collection
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'furniturefixservice@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // Technician access checked against verified technician identity
+    function isAssignedTech(techId) {
+      return isSignedIn() && techId != null && (
+        request.auth.uid == techId ||
+        (exists(/databases/$(database)/documents/technicians/$(techId)) &&
+         get(/databases/$(database)/documents/technicians/$(techId)).data.uid == request.auth.uid) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'technician' &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.technicianId == techId)
+      );
+    }
+
+    // Admins master collection - strictly read-only to verified admins
+    match /admins/{adminId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // Users collection with strict RBAC:
+    // Public users can ONLY register with role == 'customer' and CANNOT set technicianId or admin role
+    match /users/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+      
+      // Self-registration: only customer role allowed for non-admins
+      allow create: if isOwner(userId) && (
+        (incoming().role == 'customer' && !('technicianId' in incoming())) ||
+        isAdmin()
+      );
+      
+      // Updates: non-admins cannot change role or technicianId
+      allow update: if isAdmin() || (
+        isOwner(userId) &&
+        incoming().role == existing().role &&
+        (!('technicianId' in incoming()) || incoming().technicianId == existing().technicianId)
+      );
+      
+      allow delete: if isAdmin();
+    }
+
+    // Customer profiles
+    match /customers/{customerId} {
+      allow get: if isOwner(customerId) || isAdmin();
+      allow list: if isAdmin();
+      allow create, update: if isOwner(customerId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Technicians master list
+    match /technicians/{technicianId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // 2026 Customer Tariff Service Catalogue
+    match /services/{serviceId} {
+      allow read: if true; // Public catalogue
+      allow write: if isAdmin();
+    }
+
+    // Bookings & Jobs
+    match /bookings/{bookingId} {
+      // 1. READ: Admin sees all. Customers see ONLY their own bookings. Technicians see ONLY assigned jobs.
+      // NO PUBLIC ACCESS TO PREDICTABLE JOB IDS.
+      allow get: if isAdmin() || (
+        isSignedIn() && (
+          existing().customerId == request.auth.uid ||
+          isAssignedTech(existing().assignedTechId)
+        )
+      );
+
+      allow list: if isAdmin() || (
+        isSignedIn() && (
+          resource.data.customerId == request.auth.uid ||
+          isAssignedTech(resource.data.assignedTechId)
+        )
+      );
+
+      // 2. CREATE: Zero-advance booking creation
+      // Authenticated customers or valid zero-advance guest submissions with strict schema validation
+      allow create: if (
+        isSignedIn() && incoming().customerId == request.auth.uid
+      ) || (
+        // Guest zero-advance booking submission
+        incoming().status == 'New' &&
+        incoming().paymentStatus == 'Pending' &&
+        incoming().customer.name is string &&
+        incoming().customer.mobile is string &&
+        incoming().baseTotal is number &&
+        incoming().finalTotal is number &&
+        incoming().technicianPayout is number &&
+        incoming().platformMargin is number &&
+        (!('assignedTechId' in incoming()) || incoming().assignedTechId == null) &&
+        (!('customerId' in incoming()) || incoming().customerId == null)
+      );
+
+      // 3. UPDATE: Strict role authorization & field restrictions
+      allow update: if isAdmin() || (
+        // Assigned technician updating status / completion / payment
+        isAssignedTech(existing().assignedTechId) &&
+        // Cannot tamper with customer identity, items, base pricing or change assigned tech
+        incoming().customerId == existing().customerId &&
+        incoming().baseTotal == existing().baseTotal &&
+        incoming().travelCharge == existing().travelCharge &&
+        incoming().assignedTechId == existing().assignedTechId &&
+        // Status transition lifecycle validation
+        incoming().status in ['Assigned', 'Accepted', 'In Progress', 'Work Completed', 'Paid'] &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'status', 'description', 'completionPhotoUrls', 'paymentStatus', 'paymentMethod', 'paymentReference', 'statusHistory', 'addOns'
+        ])
+      ) || (
+        // Authenticated customer approving/declining add-ons
+        isSignedIn() && existing().customerId == request.auth.uid &&
+        // Customer cannot tamper with assigned tech, customer info, or base prices
+        incoming().customerId == existing().customerId &&
+        incoming().assignedTechId == existing().assignedTechId &&
+        incoming().baseTotal == existing().baseTotal &&
+        incoming().travelCharge == existing().travelCharge &&
+        // Financial integrity: finalTotal and technicianPayout cannot be reduced below initial values
+        incoming().finalTotal >= (existing().baseTotal + existing().travelCharge) &&
+        incoming().technicianPayout >= existing().technicianPayout &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'addOns', 'finalTotal', 'technicianPayout', 'platformMargin', 'statusHistory'
+        ])
+      );
+
+      // 4. DELETE: Strictly admin only
+      allow delete: if isAdmin();
+
+      // Subcollection: Status History (Append-only audit trail)
+      match /statusHistory/{historyId} {
+        allow read: if isAdmin() || (
+          isSignedIn() && (
+            get(/databases/$(database)/documents/bookings/$(bookingId)).data.customerId == request.auth.uid ||
+            isAssignedTech(get(/databases/$(database)/documents/bookings/$(bookingId)).data.assignedTechId)
+          )
+        );
+        // Only Admin, Assigned Technician, or the Booking Customer can append history
+        allow create: if isAdmin() || (
+          isSignedIn() && (
+            get(/databases/$(database)/documents/bookings/$(bookingId)).data.customerId == request.auth.uid ||
+            isAssignedTech(get(/databases/$(database)/documents/bookings/$(bookingId)).data.assignedTechId)
+          )
+        );
+        allow update, delete: if false; // Immutable audit log - NO BYPASS
+      }
+
+      // Subcollection: Onsite Add-Ons
+      match /addOns/{addOnId} {
+        allow read: if isAdmin() || (
+          isSignedIn() && (
+            get(/databases/$(database)/documents/bookings/$(bookingId)).data.customerId == request.auth.uid ||
+            isAssignedTech(get(/databases/$(database)/documents/bookings/$(bookingId)).data.assignedTechId)
+          )
+        );
+        // Only Admin or Assigned Technician can propose an add-on
+        allow create: if isAdmin() || isAssignedTech(get(/databases/$(database)/documents/bookings/$(bookingId)).data.assignedTechId);
+        // Only Admin or the Booking's authenticated customer can approve/decline an add-on
+        allow update: if isAdmin() || (
+          isSignedIn() &&
+          get(/databases/$(database)/documents/bookings/$(bookingId)).data.customerId == request.auth.uid &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'approvedAt']) &&
+          (incoming().status == 'approved' || incoming().status == 'declined')
+        );
+        allow delete: if isAdmin();
+      }
+    }
+
+    // Payments: strictly managed by Admin or verified Assigned Technician on job completion
+    match /payments/{paymentId} {
+      allow read: if isAdmin() || (isSignedIn() && isAssignedTech(existing().collectedBy));
+      allow create: if isAdmin() || (
+        isSignedIn() &&
+        incoming().jobId is string &&
+        exists(/databases/$(database)/documents/bookings/$(incoming().jobId)) &&
+        isAssignedTech(get(/databases/$(database)/documents/bookings/$(incoming().jobId)).data.assignedTechId) &&
+        incoming().amount == get(/databases/$(database)/documents/bookings/$(incoming().jobId)).data.finalTotal
+      );
+      allow update, delete: if isAdmin();
+    }
+
+    // Technician Payouts: Admin manages, technician can only read their own
+    match /payouts/{payoutId} {
+      allow read: if isAdmin() || (isSignedIn() && isAssignedTech(existing().technicianId));
+      allow write: if isAdmin();
+    }
+
+    // Audit Logs: Admin reads all. Verified authenticated users can only create their own logs. Immutable.
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() || (isSignedIn() && incoming().userId == request.auth.uid);
+      allow update, delete: if false;
+    }
+  }
+}

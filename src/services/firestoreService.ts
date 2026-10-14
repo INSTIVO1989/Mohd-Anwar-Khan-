@@ -162,17 +162,36 @@ export function subscribeToBookings(
   }
 }
 
-// Direct fetch of single booking for public/customer Job Tracking by ID
-export async function getBookingById(jobId: string): Promise<Job | null> {
+// Direct fetch of single booking for customer Job Tracking by ID
+export async function getBookingById(jobId: string, phoneVerification?: string): Promise<Job | null> {
+  // If signed in, attempt direct Firestore fetch
+  if (auth.currentUser) {
+    try {
+      const docRef = doc(db, BOOKINGS_COLLECTION, jobId);
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        return snap.data() as Job;
+      }
+      return null;
+    } catch (error) {
+      console.warn('Direct Firestore fetch not available, trying secure verification API:', error);
+    }
+  }
+
+  // Fallback to secure server-side tracking endpoint (preserves customer privacy & hides internal margins)
   try {
-    const docRef = doc(db, BOOKINGS_COLLECTION, jobId);
-    const snap = await getDoc(docRef);
-    if (snap.exists()) {
-      return snap.data() as Job;
+    const res = await fetch('/api/bookings/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jobId, phone: phoneVerification || '' }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.booking as Job;
     }
     return null;
-  } catch (error) {
-    handleFirestoreError(error, OperationType.GET, `${BOOKINGS_COLLECTION}/${jobId}`);
+  } catch (apiErr) {
+    console.warn('Tracking API error:', apiErr);
     return null;
   }
 }
@@ -186,16 +205,24 @@ export async function createBookingInFirestore(newJob: Job): Promise<void> {
     const jobDocRef = doc(db, BOOKINGS_COLLECTION, newJob.id);
     await setDoc(jobDocRef, newJob);
 
-    // Add initial status history subcollection entry
-    const historyDocRef = doc(collection(db, BOOKINGS_COLLECTION, newJob.id, 'statusHistory'));
-    await setDoc(historyDocRef, {
-      status: newJob.status,
-      timestamp: newJob.createdAt,
-      note: 'Booking submitted online with zero advance payment guarantee',
-      actor: newJob.customer.name,
-    });
+    // Add initial status history subcollection entry (graceful fallback)
+    try {
+      const historyDocRef = doc(collection(db, BOOKINGS_COLLECTION, newJob.id, 'statusHistory'));
+      await setDoc(historyDocRef, {
+        status: newJob.status,
+        timestamp: newJob.createdAt,
+        note: 'Booking submitted online with zero advance payment guarantee',
+        actor: newJob.customer.name,
+      });
+    } catch (subErr) {
+      console.warn('Subcollection status history notice:', subErr);
+    }
 
-    await recordAuditLog('BOOKING_CREATED', newJob.customerId || 'anon', `Job ${newJob.id} created for ${newJob.customer.locality} (₹${newJob.finalTotal})`);
+    try {
+      await recordAuditLog('BOOKING_CREATED', newJob.customerId || 'anon', `Job ${newJob.id} created for ${newJob.customer.locality} (₹${newJob.finalTotal})`);
+    } catch (auditErr) {
+      console.warn('Audit log notice:', auditErr);
+    }
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, `${BOOKINGS_COLLECTION}/${newJob.id}`);
     throw error;

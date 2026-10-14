@@ -115,21 +115,22 @@ service cloud.firestore {
       );
 
       // 2. CREATE: Zero-advance booking creation
-      // Authenticated customers or valid zero-advance guest submissions with strict schema validation
-      allow create: if (
-        isSignedIn() && incoming().customerId == request.auth.uid
-      ) || (
-        // Guest zero-advance booking submission
-        incoming().status == 'New' &&
-        incoming().paymentStatus == 'Pending' &&
-        incoming().customer.name is string &&
-        incoming().customer.mobile is string &&
-        incoming().baseTotal is number &&
-        incoming().finalTotal is number &&
-        incoming().technicianPayout is number &&
-        incoming().platformMargin is number &&
-        (!('assignedTechId' in incoming()) || incoming().assignedTechId == null) &&
-        (!('customerId' in incoming()) || incoming().customerId == null)
+      // Anti-overwrite guarantee: target document must not already exist
+      allow create: if !exists(/databases/$(database)/documents/bookings/$(bookingId)) && (
+        (isSignedIn() && incoming().customerId == request.auth.uid) ||
+        (
+          // Guest zero-advance booking submission
+          incoming().status == 'New' &&
+          incoming().paymentStatus == 'Pending' &&
+          incoming().customer.name is string &&
+          incoming().customer.mobile is string &&
+          incoming().baseTotal is number &&
+          incoming().finalTotal is number &&
+          incoming().technicianPayout is number &&
+          incoming().platformMargin is number &&
+          (!('assignedTechId' in incoming()) || incoming().assignedTechId == null) &&
+          (!('customerId' in incoming()) || incoming().customerId == null)
+        )
       );
 
       // 3. UPDATE: Strict role authorization & field restrictions
@@ -173,12 +174,15 @@ service cloud.firestore {
             isAssignedTech(get(/databases/$(database)/documents/bookings/$(bookingId)).data.assignedTechId)
           )
         );
-        // Only Admin, Assigned Technician, or the Booking Customer can append history
+        // Only Admin, Assigned Technician, Booking Customer, or Initial Booking Creation can append history
         allow create: if isAdmin() || (
           isSignedIn() && (
             get(/databases/$(database)/documents/bookings/$(bookingId)).data.customerId == request.auth.uid ||
             isAssignedTech(get(/databases/$(database)/documents/bookings/$(bookingId)).data.assignedTechId)
           )
+        ) || (
+          incoming().status == 'New' &&
+          exists(/databases/$(database)/documents/bookings/$(bookingId))
         );
         allow update, delete: if false; // Immutable audit log - NO BYPASS
       }
@@ -226,7 +230,7 @@ service cloud.firestore {
     // Audit Logs: Admin reads all. Verified authenticated users can only create their own logs. Immutable.
     match /auditLogs/{logId} {
       allow read: if isAdmin();
-      allow create: if isAdmin() || (isSignedIn() && incoming().userId == request.auth.uid);
+      allow create: if isAdmin() || (isSignedIn() && incoming().userId == request.auth.uid) || (incoming().userId == 'anon' && incoming().action == 'BOOKING_CREATED');
       allow update, delete: if false;
     }
   }

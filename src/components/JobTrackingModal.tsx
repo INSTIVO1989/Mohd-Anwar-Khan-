@@ -49,13 +49,15 @@ export const JobTrackingModal: React.FC = () => {
   const [searchNotFound, setSearchNotFound] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'UPI' | 'Cash'>('UPI');
   const [showQr, setShowQr] = useState(false);
+  const [phoneVerification, setPhoneVerification] = useState('');
+  const [verificationError, setVerificationError] = useState('');
 
   const targetId = activeTrackingJobId || searchId.trim();
 
   // Look in local jobs first
   const localJob = jobs.find((j) => j.id.toLowerCase() === targetId.toLowerCase());
 
-  // If not in local jobs, query Firestore
+  // If not in local jobs, query Firestore or secure verification API
   useEffect(() => {
     if (!targetId || localJob) {
       setRemoteJob(null);
@@ -67,7 +69,7 @@ export const JobTrackingModal: React.FC = () => {
     setIsSearchingRemote(true);
     setSearchNotFound(false);
 
-    getBookingById(targetId)
+    getBookingById(targetId, phoneVerification)
       .then((doc) => {
         if (!isMounted) return;
         if (doc) {
@@ -90,6 +92,27 @@ export const JobTrackingModal: React.FC = () => {
       isMounted = false;
     };
   }, [targetId, localJob]);
+
+  const handleVerifyPhone = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetId || !phoneVerification.trim()) return;
+    setIsSearchingRemote(true);
+    setVerificationError('');
+    try {
+      const doc = await getBookingById(targetId, phoneVerification.trim());
+      if (doc) {
+        setRemoteJob(doc);
+        setSearchNotFound(false);
+        setVerificationError('');
+      } else {
+        setVerificationError('Mobile number does not match this booking record.');
+      }
+    } catch (err: any) {
+      setVerificationError(err?.message || 'Verification failed');
+    } finally {
+      setIsSearchingRemote(false);
+    }
+  };
 
   if (!isTrackingModalOpen) return null;
 
@@ -160,19 +183,38 @@ export const JobTrackingModal: React.FC = () => {
           </form>
 
           {searchNotFound && (
-            <div className="mt-3 p-3 bg-amber-50/80 border border-amber-200 rounded-xl space-y-2">
-              <p className="text-xs text-amber-900 font-medium">
-                No active booking found matching "{targetId}" in this session, or access is protected by privacy rules.
+            <div className="mt-3 p-3.5 bg-amber-50/90 border border-amber-200 rounded-xl space-y-2.5">
+              <p className="text-xs text-amber-950 font-medium">
+                To protect customer privacy, please enter the registered mobile number for Job <strong>{targetId}</strong> to verify and view tracking details:
               </p>
+              <form onSubmit={handleVerifyPhone} className="flex gap-2">
+                <input
+                  type="tel"
+                  placeholder="Enter registered mobile number..."
+                  value={phoneVerification}
+                  onChange={(e) => setPhoneVerification(e.target.value)}
+                  className="flex-1 bg-white border border-amber-300 rounded-xl px-3 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+                <button
+                  type="submit"
+                  disabled={isSearchingRemote}
+                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer flex items-center gap-1"
+                >
+                  {isSearchingRemote ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Verify & Track'}
+                </button>
+              </form>
+              {verificationError && (
+                <p className="text-[11px] text-red-600 font-semibold">{verificationError}</p>
+              )}
               {!firebaseUser && (
-                <div className="flex items-center justify-between pt-1">
-                  <span className="text-[11px] text-amber-800">Booked with your Google account?</span>
+                <div className="flex items-center justify-between pt-1 border-t border-amber-200/60">
+                  <span className="text-[11px] text-amber-800">Or sign in with your Google account:</span>
                   <button
                     type="button"
                     onClick={() => setIsAuthModalOpen(true)}
                     className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold rounded-lg cursor-pointer transition-colors"
                   >
-                    Sign In to View
+                    Sign In
                   </button>
                 </div>
               )}

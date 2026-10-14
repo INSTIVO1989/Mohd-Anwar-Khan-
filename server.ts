@@ -1,9 +1,12 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 import { GoogleGenAI } from "@google/genai";
 import { createServer as createViteServer } from "vite";
+import { initializeApp, getApps } from "firebase/app";
+import { getFirestore, doc, getDoc } from "firebase/firestore";
 
 dotenv.config();
 
@@ -294,6 +297,101 @@ app.get("/api/health", (_req, res) => {
     hasGeminiKey: Boolean(process.env.GEMINI_API_KEY),
     time: new Date().toISOString(),
   });
+});
+
+// Server-side Firestore initialization for secure tracking without exposing business margins
+let serverDb: any = null;
+try {
+  const configPath = path.resolve(__dirname, "firebase-applet-config.json");
+  if (fs.existsSync(configPath)) {
+    const rawConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    const serverApp = getApps().length === 0 ? initializeApp(rawConfig, "server-app") : getApps()[0];
+    serverDb = getFirestore(serverApp, rawConfig.firestoreDatabaseId);
+    console.log("Furniture Fix secure server tracking initialized");
+  }
+} catch (err: any) {
+  console.warn("Could not initialize server Firestore client:", err?.message);
+}
+
+// Secure guest job tracking endpoint
+// Validates phone number to prevent unauthorized access to other customers' jobs
+// Strips technician payouts and profit margins so internal financials remain confidential
+app.post("/api/bookings/track", async (req, res) => {
+  try {
+    const { jobId, phone } = req.body;
+    if (!jobId || typeof jobId !== "string") {
+      return res.status(400).json({ error: "Job ID is required" });
+    }
+
+    if (!serverDb) {
+      return res.status(503).json({ error: "Tracking database currently unavailable" });
+    }
+
+    const cleanJobId = jobId.trim().toUpperCase();
+    const docRef = doc(serverDb, "bookings", cleanJobId);
+    const snap = await getDoc(docRef);
+
+    if (!snap.exists()) {
+      return res.status(404).json({ error: "No booking found matching this Job ID" });
+    }
+
+    const booking = snap.data();
+
+    // Security check: Phone verification prevents unauthorized lookup of other customers' bookings
+    if (phone && String(phone).trim().length > 0) {
+      const cleanInput = String(phone).replace(/\D/g, "");
+      const cleanStored = String(booking.customer?.mobile || "").replace(/\D/g, "");
+      const matches =
+        cleanStored === cleanInput ||
+        (cleanInput.length >= 4 && cleanStored.endsWith(cleanInput)) ||
+        (cleanStored.length >= 4 && cleanInput.endsWith(cleanStored));
+      if (!matches) {
+        return res.status(403).json({
+          error: "Mobile verification failed. The provided phone number does not match this booking record.",
+          requiresPhone: true,
+        });
+      }
+    } else {
+      // Require phone verification to protect privacy
+      return res.status(401).json({
+        error: "Please provide your registered mobile number to verify access to this booking record.",
+        requiresPhone: true,
+      });
+    }
+
+    // Strip internal profit margins and technician payouts before returning to customer
+    const sanitizedBooking = {
+      id: booking.id,
+      status: booking.status,
+      appointmentDate: booking.appointmentDate,
+      appointmentSlot: booking.appointmentSlot,
+      createdAt: booking.createdAt,
+      customer: {
+        name: booking.customer?.name,
+        locality: booking.customer?.locality,
+        address: booking.customer?.address,
+        mobile: booking.customer?.mobile
+          ? booking.customer.mobile.replace(/(\d{2})\d{4}(\d{4})/, "$1****$2")
+          : "",
+      },
+      items: booking.items || [],
+      addOns: booking.addOns || [],
+      baseTotal: booking.baseTotal,
+      travelCharge: booking.travelCharge,
+      finalTotal: booking.finalTotal,
+      paymentStatus: booking.paymentStatus,
+      paymentMethod: booking.paymentMethod,
+      paymentReference: booking.paymentReference,
+      statusHistory: booking.statusHistory || [],
+      assignedTechId: booking.assignedTechId,
+      completionPhotoUrls: booking.completionPhotoUrls || [],
+    };
+
+    return res.json({ booking: sanitizedBooking });
+  } catch (error: any) {
+    console.error("Error in /api/bookings/track:", error?.message);
+    return res.status(500).json({ error: "Failed to query booking tracking record" });
+  }
 });
 
 // Vite middleware or static serving
