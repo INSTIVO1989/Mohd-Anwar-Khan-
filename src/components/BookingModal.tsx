@@ -28,14 +28,17 @@ export const BookingModal: React.FC = () => {
     clearCart,
     createBooking,
     selectedZone,
+    currentUser,
+    firebaseUser,
   } = useApp();
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form State
-  const [customerName, setCustomerName] = useState('');
+  const [customerName, setCustomerName] = useState(() => firebaseUser?.displayName || '');
   const [customerPhone, setCustomerPhone] = useState('');
-  const [customerEmail, setCustomerEmail] = useState('');
+  const [customerEmail, setCustomerEmail] = useState(() => firebaseUser?.email || '');
   const [address, setAddress] = useState('');
   const [locality, setLocality] = useState(selectedZone?.name || 'Thane West');
   const [pincode, setPincode] = useState(selectedZone?.pincode || '400601');
@@ -85,47 +88,57 @@ export const BookingModal: React.FC = () => {
     }
   };
 
-  const handleSubmitBooking = () => {
+  const handleSubmitBooking = async () => {
     if (!consentAccepted) {
       setErrorMsg('Please accept the service policy to confirm your booking.');
       return;
     }
 
-    const jobItems: JobItem[] = cart.map((c) => ({
-      serviceId: c.item.id,
-      name: c.item.name,
-      category: c.item.category,
-      quantity: c.quantity,
-      unitPrice: c.item.customerPrice,
-      total: c.item.customerPrice * c.quantity,
-    }));
+    setIsSubmitting(true);
+    setErrorMsg('');
 
-    // Estimate technician payout based on items
-    const estimatedTechPayout = cart.reduce(
-      (sum, c) => sum + c.item.technicianPayoutAmount * c.quantity,
-      0
-    );
+    try {
+      const jobItems: JobItem[] = cart.map((c) => ({
+        serviceId: c.item.id,
+        name: c.item.name,
+        category: c.item.category,
+        quantity: c.quantity,
+        unitPrice: c.item.customerPrice,
+        total: c.item.customerPrice * c.quantity,
+      }));
 
-    createBooking({
-      customer: {
-        name: customerName,
-        mobile: customerPhone,
-        email: customerEmail || undefined,
-        address,
-        locality,
-        pincode,
-      },
-      items: jobItems,
-      appointmentDate,
-      appointmentSlot,
-      description: description || undefined,
-      travelCharge,
-      baseTotal: itemsTotal,
-      finalTotal: grandTotal,
-      paymentStatus: 'Pending',
-      technicianPayout: estimatedTechPayout,
-      platformMargin: grandTotal - estimatedTechPayout,
-    });
+      // Estimate technician payout based on items
+      const estimatedTechPayout = cart.reduce(
+        (sum, c) => sum + c.item.technicianPayoutAmount * c.quantity,
+        0
+      );
+
+      await createBooking({
+        customer: {
+          name: customerName,
+          mobile: customerPhone,
+          email: customerEmail || undefined,
+          address,
+          locality,
+          pincode,
+        },
+        items: jobItems,
+        appointmentDate,
+        appointmentSlot,
+        description: description || undefined,
+        travelCharge,
+        baseTotal: itemsTotal,
+        finalTotal: grandTotal,
+        paymentStatus: 'Pending',
+        technicianPayout: estimatedTechPayout,
+        platformMargin: grandTotal - estimatedTechPayout,
+      });
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err?.message || 'Failed to submit booking. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -470,10 +483,11 @@ export const BookingModal: React.FC = () => {
           ) : (
             <button
               onClick={handleSubmitBooking}
-              className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-amber-400 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer shadow-md"
+              disabled={isSubmitting}
+              className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-amber-400 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50"
             >
               <CheckCircle2 className="w-4 h-4 text-teal-400" />
-              <span>Confirm Booking (₹0 Advance)</span>
+              <span>{isSubmitting ? 'Creating Booking...' : 'Confirm Booking (₹0 Advance)'}</span>
             </button>
           )}
         </div>

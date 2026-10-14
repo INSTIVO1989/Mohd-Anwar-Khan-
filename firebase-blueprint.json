@@ -1,0 +1,208 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with role-based access control (customer, technician, admin)",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "format": "email", "description": "User email address" },
+        "displayName": { "type": "string", "description": "User full name" },
+        "photoURL": { "type": "string", "description": "User avatar URL" },
+        "role": { "type": "string", "enum": ["customer", "technician", "admin"], "description": "RBAC user role" },
+        "technicianId": { "type": "string", "description": "Linked technician ID if role is technician" },
+        "phone": { "type": "string", "description": "Contact phone number" },
+        "createdAt": { "type": "string", "description": "Timestamp created" },
+        "updatedAt": { "type": "string", "description": "Timestamp updated" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "Customer record with locality and contact info",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Customer ID or Auth UID" },
+        "name": { "type": "string", "description": "Full name" },
+        "phone": { "type": "string", "description": "Mobile number" },
+        "email": { "type": "string", "description": "Email address" },
+        "address": { "type": "string", "description": "Street address" },
+        "locality": { "type": "string", "description": "MMR locality name" },
+        "pincode": { "type": "string", "description": "6-digit pincode" }
+      },
+      "required": ["name", "phone", "locality", "pincode"]
+    },
+    "Technician": {
+      "title": "Technician",
+      "description": "Field technician profile and availability",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Technician ID (e.g. TECH-001)" },
+        "name": { "type": "string", "description": "Technician name" },
+        "phone": { "type": "string", "description": "Technician phone" },
+        "email": { "type": "string", "description": "Technician email for login linking" },
+        "baseLocality": { "type": "string", "description": "Home dispatch locality" },
+        "skills": { "type": "string", "description": "Comma-separated skill categories" },
+        "rating": { "type": "number", "description": "Customer rating" },
+        "status": { "type": "string", "enum": ["Available", "On Job", "Offline"], "description": "Availability state" },
+        "activeJobsCount": { "type": "number", "description": "Current active jobs count" }
+      },
+      "required": ["id", "name", "phone", "baseLocality", "status"]
+    },
+    "ServiceItem": {
+      "title": "ServiceItem",
+      "description": "2026 Customer master tariff and scope item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Service ID" },
+        "category": { "type": "string", "description": "Furniture category" },
+        "name": { "type": "string", "description": "Item name" },
+        "customerPrice": { "type": "number", "description": "Customer price in INR" },
+        "priceType": { "type": "string", "enum": ["fixed", "from", "quote"], "description": "Pricing model" },
+        "technicianPayoutAmount": { "type": "number", "description": "Technician payout in INR" },
+        "includedScope": { "type": "string", "description": "Itemized scope included" }
+      },
+      "required": ["id", "category", "name", "customerPrice", "includedScope"]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "Customer booking and operational job record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Human-friendly Job ID e.g. FF-26-04287" },
+        "customerId": { "type": "string", "description": "Customer UID or phone" },
+        "customerName": { "type": "string", "description": "Customer name" },
+        "customerPhone": { "type": "string", "description": "Customer mobile" },
+        "customerEmail": { "type": "string", "description": "Customer email" },
+        "address": { "type": "string", "description": "Service address" },
+        "locality": { "type": "string", "description": "Locality name" },
+        "pincode": { "type": "string", "description": "Postal pincode" },
+        "items": { "type": "string", "description": "JSON stringified items list" },
+        "assignedTechId": { "type": "string", "description": "Assigned technician ID" },
+        "appointmentDate": { "type": "string", "description": "YYYY-MM-DD" },
+        "appointmentSlot": { "type": "string", "description": "Time slot window" },
+        "status": { "type": "string", "description": "Current job status" },
+        "travelCharge": { "type": "number", "description": "Travel fee" },
+        "baseTotal": { "type": "number", "description": "Labour total" },
+        "finalTotal": { "type": "number", "description": "Grand total payable" },
+        "paymentStatus": { "type": "string", "enum": ["Pending", "Paid"], "description": "Payment collection state" },
+        "paymentMethod": { "type": "string", "description": "Cash or UPI" },
+        "paymentReference": { "type": "string", "description": "Transaction reference" },
+        "technicianPayout": { "type": "number", "description": "Technician earnings" },
+        "platformMargin": { "type": "number", "description": "Platform margin" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" }
+      },
+      "required": ["id", "customerName", "customerPhone", "locality", "pincode", "status", "finalTotal"]
+    },
+    "JobStatusHistory": {
+      "title": "JobStatusHistory",
+      "description": "Timeline log entry for job status change",
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "description": "New status" },
+        "timestamp": { "type": "string", "description": "ISO timestamp" },
+        "note": { "type": "string", "description": "Transition note" },
+        "actor": { "type": "string", "description": "User or system who changed status" }
+      },
+      "required": ["status", "timestamp", "actor"]
+    },
+    "AddOnRequest": {
+      "title": "AddOnRequest",
+      "description": "On-site extra service proposal requiring customer approval",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Add-on ID" },
+        "description": { "type": "string", "description": "Extra service description" },
+        "amount": { "type": "number", "description": "Charge amount in INR" },
+        "status": { "type": "string", "enum": ["pending", "approved", "declined"], "description": "Customer approval status" },
+        "requestedAt": { "type": "string", "description": "Timestamp requested" },
+        "approvedAt": { "type": "string", "description": "Timestamp approved" }
+      },
+      "required": ["id", "description", "amount", "status", "requestedAt"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Recorded customer payment transaction",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Payment ID" },
+        "jobId": { "type": "string", "description": "Associated Job ID" },
+        "amount": { "type": "number", "description": "Amount collected" },
+        "method": { "type": "string", "enum": ["Cash", "UPI"], "description": "Payment method" },
+        "reference": { "type": "string", "description": "UPI ref or cash note" },
+        "collectedAt": { "type": "string", "description": "Timestamp collected" },
+        "collectedBy": { "type": "string", "description": "Technician ID who took payment" }
+      },
+      "required": ["id", "jobId", "amount", "method", "collectedAt"]
+    },
+    "Payout": {
+      "title": "Payout",
+      "description": "Technician settlement record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Payout ID" },
+        "technicianId": { "type": "string", "description": "Technician ID" },
+        "amount": { "type": "number", "description": "Payout amount in INR" },
+        "status": { "type": "string", "enum": ["Pending", "Approved", "Paid"], "description": "Settlement state" },
+        "jobCount": { "type": "number", "description": "Number of completed jobs included" },
+        "settledAt": { "type": "string", "description": "Settlement timestamp" }
+      },
+      "required": ["id", "technicianId", "amount", "status"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Administrative actions and security event trail",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Log ID" },
+        "action": { "type": "string", "description": "Event action name" },
+        "userId": { "type": "string", "description": "Acting user ID" },
+        "details": { "type": "string", "description": "Event metadata" },
+        "timestamp": { "type": "string", "description": "Timestamp of action" }
+      },
+      "required": ["id", "action", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles and RBAC role assignments"
+    },
+    "/customers/{customerId}": {
+      "schema": "Customer",
+      "description": "Customer profiles and contact details"
+    },
+    "/technicians/{technicianId}": {
+      "schema": "Technician",
+      "description": "Technician profiles, status, and performance"
+    },
+    "/services/{serviceId}": {
+      "schema": "ServiceItem",
+      "description": "Master 2026 service catalogue and rates"
+    },
+    "/bookings/{bookingId}": {
+      "schema": "Booking",
+      "description": "Operational customer booking and job records"
+    },
+    "/bookings/{bookingId}/statusHistory/{historyId}": {
+      "schema": "JobStatusHistory",
+      "description": "Immutable job lifecycle transitions"
+    },
+    "/bookings/{bookingId}/addOns/{addOnId}": {
+      "schema": "AddOnRequest",
+      "description": "Onsite add-on requests and customer approvals"
+    },
+    "/payments/{paymentId}": {
+      "schema": "Payment",
+      "description": "Customer payment collection records"
+    },
+    "/payouts/{payoutId}": {
+      "schema": "Payout",
+      "description": "Technician payout settlements and balance"
+    },
+    "/auditLogs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Administrative actions and security audit log"
+    }
+  }
+}

@@ -26,11 +26,56 @@ export const AdminPortal: React.FC = () => {
     updateJobStatus,
     setActiveTrackingJobId,
     setIsTrackingModalOpen,
+    isDemoMode,
+    currentUser,
+    firebaseUser,
+    setIsAuthModalOpen,
+    setAuthModalTargetRole,
+    setIsDemoMode,
   } = useApp();
 
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [assignModalJob, setAssignModalJob] = useState<Job | null>(null);
   const [selectedTechToAssign, setSelectedTechToAssign] = useState<string>('TECH-001');
+
+  // Enforce access authorization in Live Mode
+  if (!isDemoMode && currentUser?.role !== 'admin') {
+    return (
+      <div className="py-16 px-4 max-w-2xl mx-auto text-center space-y-6">
+        <div className="w-16 h-16 rounded-3xl bg-indigo-50 border border-indigo-200 text-indigo-700 flex items-center justify-center mx-auto shadow-sm">
+          <ShieldCheck className="w-8 h-8" />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-2xl font-black text-slate-900 tracking-tight">Admin Dispatch Portal Restricted</h2>
+          <p className="text-sm text-slate-600 max-w-md mx-auto leading-relaxed">
+            Live Cloud administration, dispatch operations, and financial settlement records are restricted to verified administrator accounts.
+          </p>
+          {firebaseUser && (
+            <p className="text-xs text-slate-500 font-medium">
+              Signed in as: <span className="font-semibold text-slate-800">{firebaseUser.email}</span> (Role: {currentUser?.role || 'Customer'})
+            </p>
+          )}
+        </div>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+          <button
+            onClick={() => {
+              setAuthModalTargetRole('admin');
+              setIsAuthModalOpen(true);
+            }}
+            className="w-full sm:w-auto px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-md transition-colors cursor-pointer"
+          >
+            Sign In with Admin Account
+          </button>
+          <button
+            onClick={() => setIsDemoMode(true)}
+            className="w-full sm:w-auto px-5 py-2.5 bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+          >
+            Switch to Sandbox Demo Mode
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const filteredJobs = jobs.filter((j) => {
     if (filterStatus === 'all') return true;

@@ -3,9 +3,30 @@ import { useApp } from '../context/AppContext';
 import { Wrench, Phone, MessageSquare, Search, ShoppingBag } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
-  const { cart, setIsBookingModalOpen, setIsTrackingModalOpen, setIsChatDrawerOpen, setRole } = useApp();
+  const {
+    cart,
+    setIsBookingModalOpen,
+    setIsTrackingModalOpen,
+    setIsChatDrawerOpen,
+    setRole,
+    currentUser,
+    firebaseUser,
+    setIsAuthModalOpen,
+    setAuthModalTargetRole,
+    isDemoMode,
+  } = useApp();
 
   const totalCartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+
+  const handleWorkspaceHubClick = () => {
+    if (isDemoMode || currentUser?.role === 'admin') {
+      setRole('admin');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      setAuthModalTargetRole('admin');
+      setIsAuthModalOpen(true);
+    }
+  };
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
@@ -44,10 +65,7 @@ export const Navbar: React.FC = () => {
             Track Job
           </button>
           <button
-            onClick={() => {
-              setRole('admin');
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
+            onClick={handleWorkspaceHubClick}
             className="hover:text-indigo-700 transition-colors flex items-center gap-1.5 whitespace-nowrap text-indigo-600 font-bold cursor-pointer"
           >
             <span className="w-2 h-2 rounded-full bg-indigo-500" />
@@ -64,6 +82,23 @@ export const Navbar: React.FC = () => {
           >
             <MessageSquare className="w-4 h-4 text-teal-600" />
             <span className="hidden sm:inline">Ask AI Assistant</span>
+          </button>
+
+          <button
+            onClick={() => setIsAuthModalOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+            title="User Profile & Account"
+          >
+            {firebaseUser ? (
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                <span className="font-bold text-slate-800 max-w-[100px] truncate">
+                  {firebaseUser.displayName?.split(' ')[0] || firebaseUser.email?.split('@')[0]}
+                </span>
+              </div>
+            ) : (
+              <span>Sign In</span>
+            )}
           </button>
 
           <a

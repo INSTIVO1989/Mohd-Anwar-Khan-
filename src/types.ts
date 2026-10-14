@@ -53,6 +53,7 @@ export interface JobAddOn {
 
 export interface Job {
   id: string; // e.g., "FF-26-04287"
+  customerId?: string; // Auth UID or client token
   customer: {
     name: string;
     mobile: string;
@@ -92,6 +93,7 @@ export interface Technician {
   name: string;
   role: string;
   phone: string;
+  email?: string;
   baseLocality: string;
   skills: string[];
   activeJobsCount: number;
@@ -132,4 +134,24 @@ export interface CommissionEntry {
   platformCommission: number;
   taxTcsReserve: number;
   status: 'Pending' | 'Reconciled' | 'Settled';
+}
+
+export type UserRole = 'customer' | 'technician' | 'admin';
+
+export interface UserProfile {
+  uid: string;
+  email: string;
+  displayName: string | null;
+  photoURL: string | null;
+  role: UserRole;
+  technicianId?: string;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  action: string;
+  userId: string;
+  userEmail?: string;
+  details: string;
+  timestamp: string;
 }

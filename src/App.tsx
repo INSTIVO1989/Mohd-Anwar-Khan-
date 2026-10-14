@@ -17,6 +17,7 @@ import { JobTrackingModal } from './components/JobTrackingModal';
 import { ChatAssistantDrawer } from './components/ChatAssistantDrawer';
 import { TechnicianPortal } from './components/TechnicianPortal';
 import { AdminPortal } from './components/AdminPortal';
+import { AuthModal } from './components/AuthModal';
 
 const AppContent: React.FC = () => {
   const { role } = useApp();
@@ -55,6 +56,7 @@ const AppContent: React.FC = () => {
       <BookingModal />
       <JobTrackingModal />
       <ChatAssistantDrawer />
+      <AuthModal />
 
       {/* Role Switcher floating bar at bottom */}
       <RoleSwitcher />

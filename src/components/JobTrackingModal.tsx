@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { Job, JobStatus } from '../types';
+import { getBookingById } from '../services/firestoreService';
 import {
   X,
   Search,
@@ -15,6 +16,7 @@ import {
   Share2,
   Check,
   Wrench,
+  Loader2,
 } from 'lucide-react';
 
 const STATUS_ORDER: JobStatus[] = [
@@ -40,14 +42,56 @@ export const JobTrackingModal: React.FC = () => {
   } = useApp();
 
   const [searchId, setSearchId] = useState('');
+  const [remoteJob, setRemoteJob] = useState<Job | null>(null);
+  const [isSearchingRemote, setIsSearchingRemote] = useState(false);
+  const [searchNotFound, setSearchNotFound] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'UPI' | 'Cash'>('UPI');
   const [showQr, setShowQr] = useState(false);
 
+  const targetId = activeTrackingJobId || searchId.trim();
+
+  // Look in local jobs first
+  const localJob = jobs.find((j) => j.id.toLowerCase() === targetId.toLowerCase());
+
+  // If not in local jobs, query Firestore
+  useEffect(() => {
+    if (!targetId || localJob) {
+      setRemoteJob(null);
+      setSearchNotFound(false);
+      return;
+    }
+
+    let isMounted = true;
+    setIsSearchingRemote(true);
+    setSearchNotFound(false);
+
+    getBookingById(targetId)
+      .then((doc) => {
+        if (!isMounted) return;
+        if (doc) {
+          setRemoteJob(doc);
+          setSearchNotFound(false);
+        } else {
+          setRemoteJob(null);
+          setSearchNotFound(true);
+        }
+      })
+      .catch((err) => {
+        console.error('Remote lookup failed:', err);
+        if (isMounted) setSearchNotFound(true);
+      })
+      .finally(() => {
+        if (isMounted) setIsSearchingRemote(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [targetId, localJob]);
+
   if (!isTrackingModalOpen) return null;
 
-  const currentJob: Job | undefined = jobs.find(
-    (j) => j.id === (activeTrackingJobId || searchId)
-  ) || jobs[0];
+  const currentJob: Job | undefined = localJob || remoteJob || jobs[0];
 
   const assignedTech = technicians.find((t) => t.id === currentJob?.assignedTechId);
 
@@ -105,11 +149,19 @@ export const JobTrackingModal: React.FC = () => {
             </div>
             <button
               type="submit"
-              className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-semibold hover:bg-slate-800 cursor-pointer"
+              disabled={isSearchingRemote}
+              className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-semibold hover:bg-slate-800 cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
             >
-              Track
+              {isSearchingRemote && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              <span>Track</span>
             </button>
           </form>
+
+          {searchNotFound && (
+            <p className="text-xs text-red-600 mt-2 font-medium">
+              No booking found matching "{targetId}". Please verify your Job ID format (e.g. FF-26-04287).
+            </p>
+          )}
         </div>
 
         {currentJob ? (

@@ -26,6 +26,12 @@ export const TechnicianPortal: React.FC = () => {
     requestAddOn,
     completeJob,
     recordPayment,
+    isDemoMode,
+    currentUser,
+    firebaseUser,
+    setIsAuthModalOpen,
+    setAuthModalTargetRole,
+    setIsDemoMode,
   } = useApp();
 
   const [activeJobModal, setActiveJobModal] = useState<Job | null>(null);
@@ -35,10 +41,51 @@ export const TechnicianPortal: React.FC = () => {
   const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
   const [completionNotes, setCompletionNotes] = useState('All bolts tightened, hydraulic struts tested, work area cleaned.');
 
-  const currentTechnician = technicians.find((t) => t.id === selectedTechId) || technicians[0];
+  // Enforce access authorization in Live Mode
+  if (!isDemoMode && currentUser?.role !== 'technician' && currentUser?.role !== 'admin') {
+    return (
+      <div className="py-16 px-4 max-w-2xl mx-auto text-center space-y-6">
+        <div className="w-16 h-16 rounded-3xl bg-teal-50 border border-teal-200 text-teal-700 flex items-center justify-center mx-auto shadow-sm">
+          <Wrench className="w-8 h-8" />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-2xl font-black text-slate-900 tracking-tight">Technician Field Access Required</h2>
+          <p className="text-sm text-slate-600 max-w-md mx-auto leading-relaxed">
+            Please sign in with your verified technician credentials to view your assigned work orders and log on-site completion.
+          </p>
+          {firebaseUser && (
+            <p className="text-xs text-slate-500 font-medium">
+              Signed in as: <span className="font-semibold text-slate-800">{firebaseUser.email}</span> (Role: {currentUser?.role || 'Customer'})
+            </p>
+          )}
+        </div>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+          <button
+            onClick={() => {
+              setAuthModalTargetRole('technician');
+              setIsAuthModalOpen(true);
+            }}
+            className="w-full sm:w-auto px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-md transition-colors cursor-pointer"
+          >
+            Sign In with Technician Account
+          </button>
+          <button
+            onClick={() => setIsDemoMode(true)}
+            className="w-full sm:w-auto px-5 py-2.5 bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+          >
+            Switch to Sandbox Demo Mode
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // In live mode, technician ID is bound to the verified profile
+  const effectiveTechId = (!isDemoMode && currentUser?.technicianId) ? currentUser.technicianId : selectedTechId;
+  const currentTechnician = technicians.find((t) => t.id === effectiveTechId) || technicians[0];
 
   // Jobs assigned to this technician
-  const techJobs = jobs.filter((j) => j.assignedTechId === selectedTechId);
+  const techJobs = jobs.filter((j) => j.assignedTechId === effectiveTechId);
   const activeJobs = techJobs.filter((j) => !['Completed', 'Paid', 'Cancelled'].includes(j.status));
   const completedJobs = techJobs.filter((j) => ['Work Completed', 'Customer Confirmed', 'Paid'].includes(j.status));
 
